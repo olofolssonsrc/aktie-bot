@@ -1,1 +1,1 @@
-Created by Erik Sirborg and Olof Olsson
+Degree project Erik Sirborg and Olof Olsson
