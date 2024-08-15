@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+        }
+
+        #left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        #right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            border: 1px solid black;
+            margin-top: 0pc;
+            padding: 0;
+            float:top;
+            margin-bottom: 0px;
+            transform: scale(0.90);
+            transform-origin: top left;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div id="left-panel">
+    <canvas id="myCanvas" width="1050" height="500"></canvas>
+    <canvas id="myCanvas2" width="1050" height="500"></canvas>
+</div>
+
+<div id="right-panel">
+    <input type="file" id="fileInput" accept=".txt"><br>
+
+    <p id="bot_val" style="background-color: green; font-size: larger; padding: 5px;border-radius: 5px;">
+        <input type="radio" name="bot" value="1"> basic sliding bot v1 <br>
+        <input type="radio" name="bot" checked="true" value="2"> basic sliding bot v2<br>
+        <input type="radio" name="bot" value="3"> exponential sliding v1<br>
+    </p>
+
+    <p style="background-color: orange; padding: 5px;border-radius: 5px;">
+        <label for="myCheckbox">endast accumulerad vinst</label>
+        <input type="checkbox" id="myCheckbox" checked>
+        <label for="myCheckbox2">relativ värde</label>
+        <input type="checkbox" id="myCheckbox2" checked>
+        <br> 
+    </p>
+ 
+    <p id="Spcifik_botinf" >
+        <div id="v2ochExp" style="padding: 5px; background-color: salmon; border-radius: 5px;">
+
+        <label for="mySlider">stopVinst</label>
+        <input type="range" min="1" max="1.3" step="0.001" value="1.03" class="slider" id="mySlider">
+        <span id="sliderValue">1.03</span>
+        <br> <br>
+        <label for="mySlider2">stopLoss</label>
+        <input type="range" min="1" max="1.3" step="0.001" value="1.03" class="slider" id="mySlider2">
+        <span id="sliderValue2">1.03</span>
+        <br> <br>
+        <label for="mySlider3">kort slider length</label>
+        <input type="range" min="1" max="1000" step="1" value="40" class="slider" id="mySlider3">
+        <span id="sliderValue3">40</span>
+        <br> <br>
+        <label for="mySlider4">long slider length</label>
+        <input type="range" min="1" max="1000" step="1" value="140" class="slider" id="mySlider4">
+        <span id="sliderValue4">140</span>
+        <br>
+        <div id="onlyExp" style="display:none;">
+        <label for="mySlider5">alfa kort slider</label>
+        <input type="range" min="0" max="1" step="0.001" value="0.5" class="slider" id="mySlider5">
+        <span id="sliderValue5">1</span>
+        <br>
+        <br>
+        <label for="mySlider6">alfa long slider</label>
+        <input type="range" min="0" max="1" step="0.001" value="0.5" class="slider" id="mySlider6">
+        <span id="sliderValue6">1</span>
+        </div>
+        </div>
+    </p><p style="background-color: lightblue; padding: 5px;border-radius: 5px;">
+        (Endast standard sliding avg v2 just nu.)
+       <br>
+        <label for="antal_test">Antal test</label>
+        <input type="text" id="antal_test" name="antal_test" pattern="\d*" value="10">
+        <br>
+        <label for="period_length">Periodernas längd</label>
+        <input type="text" id="period_length" onclick="toggleInputValueText()" name="period_length" pattern="\d*" value="500" >
+        <br>
+        <label for="hela_perioden">Hela Perioden</label>
+        <input type="checkbox" onclick="toggleInputValue()" id="hela_perioden" name="hela_perioden">
+        <button onclick="korTest()">Utför test</button>
+       </p>
+
+    <p id="coolInfo"></p>
+
+</div>
+
+</body>
+</html>
+<script>
+
+var filePath = 'aaxj.us.txt';
+var file;
+
+var mainCurve;
+var slidingAvg1;
+var slidingAvg2;
+
+var onlyAccumue=true;
+
+var bottype = 2;
+
+const checkbox = document.getElementById("myCheckbox");
+
+checkbox.addEventListener("change", function() {
+    if (checkbox.checked) {
+        onlyAccumue=true;
+    } else {
+        onlyAccumue=false;
+    }
+    reCalcCurves();
+});
+
+const checkbox2 = document.getElementById("myCheckbox2");
+
+checkbox2.addEventListener("change", function() {
+   // console.log("123123")
+    if (checkbox2.checked) {
+        relative=true;
+    } else {
+        relative=false;
+    }
+    reCalcCurves();
+});
+
+const botRadios = document.querySelectorAll('input[name="bot"]');
+
+botRadios.forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.checked) {
+            bottype = parseInt(this.value);
+            reCalcCurves();
+        }
+    });
+});
+
+
+var prevLängd = 500;
+
+function toggleInputValue() {
+    var checkbox = document.getElementById('hela_perioden');
+    var textInput = document.getElementById('period_length');
+    if (checkbox.checked && mainCurve != undefined) {
+        prevLängd = textInput.value;
+       textInput.value = mainCurve.vals.length;
+    } else{
+        textInput.value = prevLängd;
+    }
+}
+
+function toggleInputValueText() {
+    var checkbox = document.getElementById('hela_perioden');
+    checkbox.checked = false;
+}
+
+function korTest(){
+    var testData = [];
+   /* for (let i = testRangeStartLong*(1/factor); i <= parseInt(testRangeStopLong * (1/factor)); i++) {
+        if (!testData[i - testRangeStartLong]) {
+                testData[i - testRangeStartLong] = [];
+            }
+        for (let j = shortRangeStart*(1/factor); j <= parseInt((i*factor - minDist )* (1/factor)); j++) {
+
+  
+
+            resrestres = basicSlidAvgBot2(mainCurve, 1.15, 1.15, j*factor, i*factor);
+       //     console.log(j*factor+ "  " + i*factor)
+            testData[i - testRangeStartLong][j - shortRangeStart] = getFinalVärde(mainCurve, resrestres);
+         //   console.log(j + "   " + i + "     " +  testData[i][j])
+           // console.log(testData[i][j]);
+        }   
+    }*/
+
+    var longRange = 90;
+    var shortRange = 90;
+
+    var longStart = 50;
+    var shortStart = 10;
+
+    var antalTest = parseInt(document.getElementById("antal_test").value);
+    var testLängd = parseInt(document.getElementById("period_length").value);
+
+    if(document.getElementById("hela_perioden").checked){
+        testLängd = mainCurve.vals.length;
+//document.getElementById(period_length).value = testLängd
+        //console.log("123")
+    }
+
+    console.log(testLängd);
+
+    for (let k = 0; k < antalTest; k++) {
+
+        var vals_ = mainCurve.vals;
+        var startindex =  Math.floor(Math.random() * (vals_.length - testLängd + 1));
+        var ny_vals = getSubcurve(mainCurve, startindex, testLängd)
+
+       // mainCurve.vals = ny_vals;
+        newCurve = {
+            highest : mainCurve.highest,
+            lowest : mainCurve.lowest,
+            vals : ny_vals
+        };
+
+        for (let i = longStart; i <= longRange + longStart; i++) {
+            if (!testData[i - longStart]) {
+                    testData[i - longStart] = [];
+            }
+            var maxmaxmax = shortStart + shortRange;
+            if(maxmaxmax >= i){
+                maxmaxmax = i - 1;
+            }
+            for (let j = 10; j <= maxmaxmax; j++) {
+
+                resrestres = basicSlidAvgBot2(newCurve, 1.15, 1.15, j, i);
+                //   console.log(j*factor+ "  " + i*factor)
+                if(k == 0){
+                    testData[i - longStart][j - shortStart] = getFinalVärde(newCurve, resrestres) / antalTest;
+                }else{
+                    testData[i - longStart][j - shortStart] += getFinalVärde(newCurve, resrestres) / antalTest;
+                }
+                // console.log(j + "   " + i + "     " +  testData[i][j])
+                //console.log(testData[i][j]);
+            }   
+    }
+        
+    }
+
+
+    function getSubcurve(curve, start, längd){
+
+        var vals_ = curve.vals;
+        if (start < 0 || start >= vals_.length || start + längd > vals_.length) {
+            throw new Error(start + "   " + längd);
+        }
+        var subcurve = vals_.slice(start, start + längd);
+        return subcurve;
+
+    }
+
+
+    //console.log(testData.length + "    " + testData[0].length)
+
+    json = {
+        data : testData,
+        shortStart : shortStart,
+        shortRange : shortRange,
+        longStart : longStart, 
+        longRange : longRange
+    }
+
+    var jsonString = JSON.stringify(json);
+  //  console.log(testData)
+    navigator.clipboard.writeText(jsonString)
+    .then(() => {
+        alert('sparat');
+    })
+    .catch(err => {
+        console.error('fail : ', err);
+    });
+}
+
+
+function reCalcCurves(){
+
+    var resrestres = [];
+    switch (bottype) {
+    case 1:
+        document.getElementById("v2ochExp").style.display = "none";
+        document.getElementById("onlyExp").style.display = "none";
+        resrestres = basicSlidAvgBot(mainCurve);
+        break;
+    case 2:
+        document.getElementById("onlyExp").style.display = "none";
+        document.getElementById("v2ochExp").style.display = "block";
+        slidingAvg1.vals = slideAvg(mainCurve.vals, slider3val);
+        slidingAvg2.vals = slideAvg(mainCurve.vals, slider4val);
+        resrestres = basicSlidAvgBot2(mainCurve, sliderval, slider2val, slider3val, slider4val);
+        break;
+    case 3:
+        document.getElementById("onlyExp").style.display = "block";
+        document.getElementById("v2ochExp").style.display = "block";
+        slidingAvg1.vals = slideAvgExp(mainCurve.vals, slider3val, slider5val);
+        slidingAvg2.vals = slideAvgExp(mainCurve.vals, slider4val, slider6val);
+        resrestres = exponentialSlidBot(mainCurve, sliderval, slider2val, slider3val, slider4val, slider5val, slider6val);
+        break;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+    drawCurve(mainCurve, 0, mainCurve.vals.length - 1, "MediumSeaGreen", true)
+    drawCurve(slidingAvg1, slider3val, mainCurve.vals.length - 1, "orange", false)
+    drawCurve(slidingAvg2, slider4val, mainCurve.vals.length - 1,"red", false)
+
+    calculate_Val(mainCurve, resrestres)
+    displaySellBuy(mainCurve, resrestres)
+    output.innerHTML = slider.value;
+    output2.innerHTML = slider2.value;
+    output3.innerHTML = slider3.value;
+    output4.innerHTML = slider4.value;
+    output5.innerHTML = slider5.value;
+    output6.innerHTML = slider6.value;
+}
+
+//Gör allting när man laddar in en fil
+document.getElementById('fileInput').addEventListener('change', function() {
+    file = this.files[0];
+    var reader = new FileReader();
+    
+    reader.onload = function(event) {
+        var csv = event.target.result;
+        var lines = csv.split('\n');
+        var output = document.getElementById('output');
+        
+        var vals = [lines.length];
+        var highest = 0;
+        var lowest = 999999;
+
+        //berarbeta filen
+        for (var i = 1; i < lines.length - 1; i++) {
+            var line = lines[i].trim();
+            var cells = line.split(',');
+            val = parseFloat(cells[4])
+            vals[i] = val;
+
+            if(val >= highest){
+                highest = val;
+            }
+
+            if(val <= lowest){
+                lowest = val;
+            }
+        }
+
+        vals = vals.slice(1)
+        shortAvg = slideAvg(vals, 40);
+        longAvg = slideAvg(vals, 140);
+
+        //skapar lite objekt och testar dem
+        mainCurve = {
+            vals : vals,
+            highest : highest,
+            lowest : lowest
+        }        
+        slidingAvg1 = {
+            vals : shortAvg,
+            highest : highest,
+            lowest : lowest
+        } 
+        slidingAvg2 = {
+            vals : longAvg,
+            highest : highest,
+            lowest : lowest
+        } 
+        reCalcCurves()
+    };
+    
+    reader.readAsText(file);
+});
+
+var canvas = document.getElementById('myCanvas');
+var ctx = canvas.getContext('2d');
+
+const slider = document.getElementById("mySlider");
+const slider2 = document.getElementById("mySlider2");
+const slider3 = document.getElementById("mySlider3");
+const slider4 = document.getElementById("mySlider4");
+const slider5 = document.getElementById("mySlider5");
+const slider6 = document.getElementById("mySlider6");
+
+const output = document.getElementById("sliderValue");
+const output2 = document.getElementById("sliderValue2");
+const output3= document.getElementById("sliderValue3");
+const output4 = document.getElementById("sliderValue4");
+const output5 = document.getElementById("sliderValue5");
+const output6 = document.getElementById("sliderValue6");
+
+output.innerHTML = slider.value;
+output2.innerHTML = slider2.value;
+output3.innerHTML = slider3.value;
+output4.innerHTML = slider4.value;
+output5.innerHTML = slider5.value;
+output6.innerHTML = slider6.value;
+
+var sliderval = slider.value;
+var slider2val = slider2.value;
+var slider3val = slider3.value;
+var slider4val = slider4.value;
+var slider5val = slider5.value;
+var slider6val = slider6.value;
+
+slider.oninput = function() {
+    sliderval = this.value;
+    reCalcCurves();
+};
+slider2.oninput = function() {
+    slider2val = this.value;
+    reCalcCurves();
+};
+slider3.oninput = function() {
+    slider3val = this.value;
+    reCalcCurves();
+};
+slider4.oninput = function() {
+    slider4val = this.value;
+    reCalcCurves();
+};
+slider5.oninput = function() {
+    slider5val = this.value;
+    reCalcCurves();
+};
+slider6.oninput = function() {
+    slider6val = this.value;
+    reCalcCurves();
+};
+
+
+var canvas2 = document.getElementById('myCanvas2');
+var ctx2 = canvas2.getContext('2d');
+
+//En basic bot som köper/säljer när shortslideavg skär long slide averege
+function basicSlidAvgBot(curve){
+
+    var res = [curve.vals.length]
+
+    shortAvg = slideAvg(curve.vals, 40);
+    longAvg = slideAvg(curve.vals, 140);
+   // console.log(shortAvg[10])
+    var shortOver = false;
+
+    if(shortAvg[141] > longAvg[141]){
+        shortOver = true;
+    }
+
+    for(var i = 141; i < curve.vals.length; i++){
+
+        if(shortOver){
+            if(shortAvg[i] < longAvg[i]){
+                res[i] = -1;
+                shortOver = false;
+            }
+        }else{
+            if(shortAvg[i] > longAvg[i]){
+                res[i] = 1;
+                shortOver = true;
+            }
+        }
+    }
+
+    return res
+}
+
+function is3PercentLarger(number1, number2, x) {
+    return number2 > number1 * x;
+}
+function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
+   // console.log(curve + " " +stopWin+ " " + stopLoss+" " +shortLEngth+ " " + långLength)
+    var res = [curve.vals.length]
+
+    //console.log(curve)
+    shortAvg = slideAvg(curve.vals, shortLEngth);
+    longAvg = slideAvg(curve.vals, långLength);
+
+    var shortOver = false;
+
+    var hasbought = false;
+
+    if(shortAvg[långLength + 1] > longAvg[långLength + 1]){
+        shortOver = true;
+    }
+    var boughtPrice = NaN;
+    for(var i = parseInt(långLength) + 1; i < curve.vals.length; i++){
+        
+        var switched = false;
+
+        if(shortOver){
+            if(shortAvg[i] < longAvg[i]){
+                //res[i] = -1;
+                switched = true;
+                shortOver = false;
+            }
+        }else{
+            if(shortAvg[i] > longAvg[i]){
+                //res[i] = 1;
+                switched = true;
+                shortOver = true;
+            }
+        }
+
+        if(switched && shortOver && !hasbought){
+            res[i] = 1;
+            hasbought = true;
+            boughtPrice = curve.vals[i];
+
+        }else if(switched && !shortOver && hasbought){
+            res[i] = -1;
+            hasbought = false;
+            boughtPrice = NaN;
+        }
+
+        if(!isNaN(boughtPrice) && hasbought && !switched){
+            if(is3PercentLarger(boughtPrice, curve.vals[i], stopWin)){
+                res[i] = -1;
+                hasbought = false;
+                boughtPrice = NaN;
+            }else if(is3PercentLarger(curve.vals[i], boughtPrice, stopLoss)){
+                res[i] = -1;
+                hasbought = false;
+                boughtPrice = NaN;
+            }
+        }
+    }
+    
+    return res
+}
+
+function exponentialSlidBot(curve, stopWin, stopLoss, shortLEngth, långLength, alfakort, alfalong){
+
+var res = [curve.vals.length]
+
+shortAvg = slideAvgExp(curve.vals, shortLEngth, alfakort);
+longAvg = slideAvgExp(curve.vals, långLength, alfalong);
+var shortOver = false;
+
+var hasbought = false;
+
+
+if(shortAvg[långLength + 1] > longAvg[långLength + 1]){
+    shortOver = true;
+}
+var boughtPrice = NaN;
+for(var i = parseInt(långLength) + 1; i < curve.vals.length; i++){
+
+    var switched = false;
+
+
+    if(shortOver){
+        if(shortAvg[i] < longAvg[i]){
+            //res[i] = -1;
+            switched = true;
+            shortOver = false;
+        }
+    }else{
+        if(shortAvg[i] > longAvg[i]){
+            //res[i] = 1;
+            switched = true;
+            shortOver = true;
+        }
+    }
+
+    if(switched && shortOver && !hasbought){
+        res[i] = 1;
+        hasbought = true;
+        boughtPrice = curve.vals[i];
+
+    }else if(switched && !shortOver && hasbought){
+        res[i] = -1;
+        hasbought = false;
+        boughtPrice = NaN;
+    }
+
+    if(!isNaN(boughtPrice) && hasbought && !switched){
+        if(is3PercentLarger(boughtPrice, curve.vals[i], stopWin)){
+            res[i] = -1;
+            hasbought = false;
+            boughtPrice = NaN;
+        }else if(is3PercentLarger(curve.vals[i], boughtPrice, stopLoss)){
+            res[i] = -1;
+            hasbought = false;
+            boughtPrice = NaN;
+        }
+    }
+
+
+}
+return res
+}
+
+//räknar ut en average. längd är antalet tidssteg bakåt
+//dynamisk,  linjär tid 
+function slideAvg(indata, längd){
+    var res= [];
+
+    var acc = 0;
+    for(var j = 0; j < längd; j++){
+        acc += indata[j]
+    }
+    var init = acc / längd;
+    res[längd] = parseFloat(init.toFixed(3));
+
+    for(var j = parseInt(längd) + 1; j < indata.length; j++){
+        res[j] = parseFloat((res[j - 1] + indata[j]/längd - indata[j - längd]/längd).toFixed(3));
+    }
+    //console.log(res)
+    return res;
+}
+
+function slideAvgExp(indata, längd, vikt){
+
+   // console.log(indata)
+   // console.log(längd)
+  //  console.log(vikt)
+    var res= [];
+    var alfa = 2/((längd + 1)*vikt)
+
+
+    //äkna ut startvärdet genom att medelvärdet av första 
+    //perioden Som ej räknas ut sliding average på
+    var acc = 0;
+    for(var j = 0; j < längd; j++){
+        acc += indata[j]
+    }
+    var init = acc / längd;
+    res[längd] = parseFloat(init.toFixed(3));
+
+    for(var j = parseInt(längd) + 1; j < indata.length; j++){
+       // console.log(alfa + " " + indata[j] + " " + res[j - 1])
+
+        res[j] = parseFloat((alfa*indata[j] + (1 - alfa)*res[j - 1]).toFixed(3));
+        
+    }
+    
+    return res;
+}
+
+
+
+
+//Används för att välja färg för kurvor. Borde ej vara random egentligen
+function getRandomColor() {
+  var r = Math.floor(Math.random() * 256);
+  var g = Math.floor(Math.random() * 256);
+  var b = Math.floor(Math.random() * 256);
+
+  var color = 'rgb(' + r + ', ' + g + ',' + b + ' )';
+  
+  return color;
+}
+
+
+//ritar ut en kurva Startindex och slutindex är möjligtvis buggiga 
+function drawCurve(curve, startIndex, endIndex, color, start){
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+
+    //console.log(curve)
+    var testVar = 75;
+    var vals = curve.vals;
+    var highest = curve.highest;
+    var lowest = curve.lowest;
+
+    diffY = curve.highest - curve.lowest;
+
+    datapointWidth = endIndex - startIndex;
+
+    deltaX = 900 / vals.length;
+
+    var procentInPrice = ((curve.vals[0] - lowest) / diffY);
+    var procentInPixel = (50 + 400 * procentInPrice);
+
+    ctx.beginPath();
+    ctx.moveTo(testVar, 500 - procentInPixel);
+
+    for(var i = 1; i < endIndex; i++){
+
+        procentInPrice = (curve.vals[i] - lowest) / diffY;
+        procentInPixel = 50 + 400 * procentInPrice;
+        ctx.lineTo(testVar+ i * deltaX, 500 - procentInPixel);
+    }
+
+    ctx.stroke();
+    ctx.closePath();
+
+
+if(start == true){
+    ctx.strokeStyle = 'gray';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(testVar, 25, 900, 450);
+    ctx.strokeStyle = '#1111BB';
+    procentInPrice = (curve.vals[0] - lowest) / diffY;
+    procentInPixel = 50 + 400 * procentInPrice;
+    ctx.beginPath();
+    ctx.moveTo(testVar, 500 - procentInPixel);
+    ctx.lineTo(975, 500 - procentInPixel)
+    ctx.stroke();
+
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'gray';
+    procentInPrice = (curve.vals[0] - lowest) / diffY;
+    procentInPixel1 = 50;
+    procentInPixel2 = 450;
+    ctx.beginPath();
+    ctx.moveTo(975, 500 - procentInPixel1);
+    ctx.lineTo(testVar, 500 - procentInPixel1)
+    ctx.moveTo(975, 500 - procentInPixel2);
+    ctx.lineTo(testVar, 500 - procentInPixel2)
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'black';
+    var numberOfTicks = 9;
+    var spaceBetweenTicks = 44;
+    var startX = 975;
+    var startY = 50;
+    var lineLength = 5;
+    ctx.strokeStyle = 'black';
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
+    ctx.stroke();
+
+    var deltaCOOL = (highest - lowest) / numberOfTicks
+
+    for (var i = 0; i <= numberOfTicks; i++) {
+        var y = startY + (i * spaceBetweenTicks);
+
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(startX + lineLength, y);
+        ctx.stroke();
+
+        ctx.font = '13px Arial';
+        ctx.fillText((highest - deltaCOOL * i).toFixed(3), startX + lineLength + 5, y + 4);
+    }
+
+    ctx.strokeStyle = 'black';
+     numberOfTicks = 3;
+     spaceBetweenTicks = 400/3;
+     startX = testVar;
+     startY = 50;
+     lineLength = 5;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
+    ctx.stroke();
+
+    var procentInPrice23 = (curve.vals[0] - lowest) / diffY;
+    var procentInPixel23 = 50 + 400 * procentInPrice23;
+    var mitten = 500 - procentInPixel23;
+    console.log(mitten)
+    for (var i = 0; i <= numberOfTicks; i++) {
+        var y = 0;
+        if(i == 0){
+            y = 50;
+        }else if(i == 1){
+            y = mitten;
+        }else{
+            y = 450;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(startX - lineLength, y);
+        ctx.stroke();
+        ctx.font = '13px Arial';
+
+        if(y < mitten) {
+            ctx.fillStyle = 'green';
+
+        }else if(y > mitten){
+            ctx.fillStyle = 'red';
+        }else{
+            ctx.fillStyle = 'blue';
+        }
+
+        var string = String((-100*((y / mitten) - 1)).toFixed(0)) + "%";
+        if(y == mitten){
+            string = "Startpris"
+        }
+        ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4);
+        ctx.fillStyle = 'black';
+    }
+}
+}   
+
+//Anroparförst funktionen som ritar ut sälj/köp tillfälle 
+//Sen skriver ut och räknar ut hur mycket den har tjänat etc
+function displaySellBuy(curve, events){
+
+    drawSellBuy(curve, events)
+
+    var vals = curve.vals;
+
+    //antal aktier
+    var boughtStocks = 0;
+    var soldStocks = 0;
+
+    //Pengar
+    var buyAcc = 0;
+    var sellAcc = 0;
+
+    for(var i = 1; i < events.length; i++){
+        if(events[i] > 0){
+            buyAcc += events[i] * vals[i]
+            boughtStocks += events[i]
+        }else if(events[i] < 0){
+
+            sellAcc += -events[i] * vals[i]
+            soldStocks += -events[i]
+        }
+    }
+
+    var restOutput = "";
+
+    restOutput += "The bot has bought stock for a total of " + buyAcc;
+    restOutput += "<br>The bot has sold stocks for a total of " + sellAcc;
+
+    if(soldStocks > boughtStocks){
+
+        restOutput += "<br>The bot sold " + (boughtStocks - soldStocks) + " more stocks than it bought."
+
+    }else{
+
+        restOutput += "<br>At the end of the period the bot owned " + (boughtStocks - soldStocks) + " stock worth " + (boughtStocks - soldStocks)*vals[vals.length - 1];
+
+    }
+
+    document.getElementById("coolInfo").innerHTML = restOutput
+
+}
+
+function getFinalVärde(curve, events){
+
+    var vals = curve.vals;
+
+    //antal aktier
+    var boughtStocks = 0;
+    var soldStocks = 0;
+
+    //Pengar
+    var buyAcc = 0;
+    var sellAcc = 0;
+
+    var lastBuy = 0;
+    //Antar att bara köper och säljer en i taget. 
+    for(var i = 1; i < events.length; i++){
+        if(events[i] > 0){
+        //    buyAcc += events[i] * vals[i]
+            boughtStocks += events[i]
+            lastBuy += events[i] * vals[i];
+        }else if(events[i] < 0){
+
+            sellAcc += -events[i] * vals[i]
+            buyAcc += lastBuy;
+            lastBuy = 0;
+            soldStocks += -events[i]
+        }
+    }
+
+   // var vinst = (sellAcc - buyAcc) + (boughtStocks - soldStocks)*vals[vals.length - 1];
+     var vinst2 = (sellAcc - buyAcc);
+    // if(boughtStocks = soldStocks + 1){
+    //    vinst2 += 
+     //}
+     return vinst2;
+
+}
+
+//ritar ut prickar för köp och säljtillfällen. Vid varje index i arrayen. 1 betyder köp, -1 sälj, 0 ingenting. 
+//Behöver ej veta hur mycket man köper/säljer
+function drawSellBuy(curve, events){
+
+    var vals = curve.vals;
+    var highest = curve.highest;
+    var lowest = curve.lowest;
+
+    diffY = curve.highest - curve.lowest;
+
+    datapointWidth = curve.vals.length;
+
+    deltaX = 900 / datapointWidth;
+
+    var procentInPrice = ((curve.vals[0] - lowest) / diffY);
+    var procentInPixel = (50 + 400 * procentInPrice);
+
+    var startColor = ctx.fillStyle;
+
+    for(var i = 0; i < events.length; i++){
+
+        procentInPrice = (curve.vals[i] - lowest) / diffY;
+        procentInPixel = 50 + 400 * procentInPrice;
+
+        if(events[i] == 1){
+
+            ctx.beginPath();
+            ctx.arc(75 + i * deltaX, 500 - procentInPixel, 5, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'green';
+            ctx.fill();
+            ctx.closePath();
+
+        }else if(events[i] == - 1){
+
+            ctx.beginPath();
+            ctx.arc(75 + i * deltaX, 500 - procentInPixel, 5, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            ctx.closePath();
+        }
+    }
+    ctx.fillStyle = startColor;
+
+
+
+}
+var relative = true;
+
+//Antar att man köper osh säljher 1 i taget
+function calculate_Val(curve, events){
+
+    var vals = curve.vals;
+
+    //antal aktier
+    var stocksOwned = 0; 
+
+    var boughtStocks = 0;
+    var soldStocks = 0;
+    var naturalChange = 0; 
+
+    //Pengar
+    var buyAcc = 0;      // total money bought 
+    var sellAcc = 0;     // total money spent
+
+    var resLength = [vals.length];
+    var highestRelative = -999999;
+    var lowestRelative = 999999;
+
+    var highest = -999999;
+    var lowest = 999999;
+    
+    
+    var lowesti = 999999999;
+    var highest = -99999999;
+    var biggestEver = -99999999;
+    var smallestEver = 99999999;
+
+
+    var lastBoughtPrice = 0;
+    var lastSoldPrice = 0;
+    var accumulatedVinst = 0;
+
+    var TotalVal = 0;
+
+    var displayarry = [];
+    for(var i = 1; i < vals.length; i++){
+        if(events[i] > 0 && events != undefined){   // vi köper 
+
+            buyAcc += events[i] * vals[i];
+            boughtStocks += parseInt(events[i]);
+            lastBoughtPrice = vals[i];
+        }
+        else if(events[i] < 0 && events != undefined){  // vi säljer 
+
+            sellAcc += -events[i] * vals[i];
+            soldStocks += -parseInt(events[i]);
+            lastSoldPrice = vals[i];
+            accumulatedVinst += -lastBoughtPrice+lastSoldPrice;
+            lastBoughtPrice=0;
+            lastSoldPrice=0;
+        }
+
+        if(onlyAccumue){
+            TotalVal = accumulatedVinst  
+        }else{
+            TotalVal = sellAcc + (boughtStocks  -  soldStocks)*vals[i]  - buyAcc   
+        }
+
+        //console.log(buyAcc + "    " + events[i])
+        resLength[i] = TotalVal;
+        displayarry[i] = vals[i] + TotalVal;
+
+
+        
+        //var TotalVal = 0;
+        if(vals[i] + TotalVal > highestRelative){
+            highesti = i;
+            highestRelative = vals[i] + TotalVal;
+        }else if (vals[i] + TotalVal < lowestRelative){
+            lowestRelative = vals[i] + TotalVal;
+            lowesti = i;
+           
+        }
+
+        if(TotalVal > highest){
+            highest = TotalVal;
+          
+         
+        }else if (TotalVal < lowest){
+            lowest = TotalVal;
+            
+        }
+        
+    }
+
+    var testVar = 75;
+    ctx2.strokeStyle = 'gray';
+    ctx2.lineWidth = 1;
+    ctx2.strokeRect(testVar, 25, 900, 450);
+    ctx2.strokeStyle = '#1111BB';
+    procentInPrice = (curve.vals[0] - lowestRelative) / diffY;
+    procentInPixel = 50 + 400 * procentInPrice;
+    ctx2.beginPath();
+    ctx2.moveTo(testVar, 500 - procentInPixel);
+    ctx2.lineTo(975, 500 - procentInPixel)
+    ctx2.stroke();
+
+    ctx2.setLineDash([5, 5]);
+    ctx2.strokeStyle = 'gray';
+    procentInPrice = (curve.vals[0] - lowest) / diffY;
+    procentInPixel1 = 50;
+    procentInPixel2 = 450;
+    ctx2.beginPath();
+    ctx2.moveTo(975, 500 - procentInPixel1);
+    ctx2.lineTo(testVar, 500 - procentInPixel1)
+    ctx2.moveTo(975, 500 - procentInPixel2);
+    ctx2.lineTo(testVar, 500 - procentInPixel2)
+    ctx2.stroke();
+
+    ctx2.setLineDash([]);
+    ctx2.strokeStyle = 'black';
+    var numberOfTicks = 9;
+    var spaceBetweenTicks = 44;
+    var startX = 975;
+    var startY = 50;
+    var lineLength = 5;
+    ctx2.strokeStyle = 'black';
+    ctx2.beginPath();
+    ctx2.moveTo(startX, startY);
+    ctx2.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
+    ctx2.stroke();
+
+    var deltaCOOL = (highest - lowest) / numberOfTicks
+
+    for (var i = 0; i <= numberOfTicks; i++) {
+        var y = startY + (i * spaceBetweenTicks);
+
+        ctx2.beginPath();
+        ctx2.moveTo(startX, y);
+        ctx2.lineTo(startX + lineLength, y);
+        ctx2.stroke();
+
+        ctx2.font = '13px Arial';
+        ctx2.fillText((highest - deltaCOOL * i).toFixed(3), startX + lineLength + 5, y + 4);
+    }
+
+    ctx2.strokeStyle = 'black';
+    numberOfTicks = 3;
+    spaceBetweenTicks = 400/3;
+    startX = testVar;
+    startY = 50;
+    lineLength = 5;
+    ctx2.beginPath();
+    ctx2.moveTo(startX, startY);
+    ctx2.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
+    ctx2.stroke();
+
+    var procentInPrice23 = (curve.vals[0] - lowestRelative) / diffY;
+    var procentInPixel23 = 50 + 400 * procentInPrice23;
+    var mitten = 500 - procentInPixel23;
+    console.log(mitten)
+    for (var i = 0; i <= numberOfTicks; i++) {
+        var y = 0;
+        if(i == 0){
+            var procentInPrice234 = (displayarry[highesti] - lowestRelative) / diffY;
+            var procentInPixel234 = 50 + 400 * procentInPrice234;
+             y = 500 - procentInPixel234;
+        }else if(i == 1){
+            y = mitten;
+        }else{
+            var procentInPrice234 = (displayarry[lowesti] - lowestRelative) / diffY;
+            var procentInPixel234 = 50 + 400 * procentInPrice234;
+             y = 500 - procentInPixel234;
+        }
+
+        ctx2.beginPath();
+        ctx2.moveTo(startX, y);
+        ctx2.lineTo(startX - lineLength, y);
+        ctx2.stroke();
+        ctx2.font = '13px Arial';
+
+        if(y < mitten) {
+            ctx2.fillStyle = 'green';
+
+        }else if(y > mitten){
+            ctx2.fillStyle = 'red';
+        }else{
+            ctx2.fillStyle = 'blue';
+        }
+
+        var string = String((-100*((y / mitten) - 1)).toFixed(0)) + "%";
+        if(y == mitten){
+            string = "Startvärde"
+        }
+        ctx2.fillText(string, startX - ctx2.measureText(string).width - 5 - lineLength, y + 4);
+        ctx2.fillStyle = 'black';
+    }
+    
+
+    if(relative == true){
+
+        if(curve.highest > highestRelative){
+          highestRelative = curve.highest;
+        }
+        if(curve.lowest < lowestRelative){
+            lowestRelative = curve.lowest;
+        }
+
+        ctx2.strokeStyle = "darkorange"
+        ctx2.lineWidth = 1;
+
+        diffY = highestRelative - lowestRelative;
+
+        datapointWidth = displayarry.length;
+
+        deltaX = 900 / resLength.length;
+
+        var procentInPrice = parseInt((displayarry[0] - lowestRelative) / diffY);
+        var procentInPixel = parseInt(50 + 400 * procentInPrice);
+
+        ctx2.beginPath();
+        ctx2.moveTo(75, 500 - procentInPixel);
+
+        for(var i = 1; i < displayarry.length; i++){
+
+            procentInPrice = (displayarry[i] - lowestRelative) / diffY;
+            procentInPixel = 50 + 400 * procentInPrice;
+            ctx2.lineTo(75 + i * deltaX, 500 - procentInPixel);
+        }
+
+        ctx2.stroke();
+        ctx2.closePath();
+        ctx2.strokeStyle = "green"
+        var procentInPrice = (vals[0] - lowestRelative) / diffY;
+        var procentInPixel = (50 + 400 * procentInPrice);
+        ctx2.beginPath();
+        ctx2.moveTo(75, 500 - procentInPixel);
+
+        for(var i = 1; i < vals.length; i++){
+    
+            procentInPrice = (vals[i] - lowestRelative) / diffY;
+            procentInPixel = 50 + 400 * procentInPrice;
+            ctx2.lineTo(75 + i * deltaX, 500 - procentInPixel);
+        }
+
+        ctx2.stroke();
+        ctx2.closePath();
+    }else{
+
+        ctx2.strokeStyle = "darkorange"
+        ctx2.lineWidth = 1;
+
+        diffY = highest - lowest;
+
+        datapointWidth = resLength.length;
+
+        deltaX = 900 / resLength.length;
+
+        var procentInPrice = ((displayarry[1] - lowestRelative) / diffY);
+        var procentInPixel = (50 + 400 * procentInPrice);
+
+        ctx2.beginPath();
+        ctx2.moveTo(75, 500 - procentInPixel);
+
+        for(var i = 1; i < resLength.length; i++){
+
+            procentInPrice = (resLength[i] - lowest) / diffY;
+            procentInPixel = 50 + 400 * procentInPrice;
+            ctx2.lineTo(75 + i * deltaX, 500 - procentInPixel);
+        }
+
+        ctx2.stroke();
+        ctx2.closePath();
+    }
+}
+</script>
+</body>
+</html>
