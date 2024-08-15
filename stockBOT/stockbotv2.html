@@ -491,8 +491,9 @@ function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
 
     var hasbought = false;
 
-    if(shortAvg[långLength + 1] > longAvg[långLength + 1]){
+    if(shortAvg[parseInt(långLength) + 1] > longAvg[parseInt(långLength) + 1]){
         shortOver = true;
+        //console.log(långLength + "   ")
     }
     var boughtPrice = NaN;
     for(var i = parseInt(långLength) + 1; i < curve.vals.length; i++){
@@ -500,25 +501,28 @@ function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
         var switched = false;
 
         if(shortOver){
-            if(shortAvg[i] < longAvg[i]){
+            if(parseFloat(shortAvg[i]) < parseFloat(longAvg[i])){
+               
                 //res[i] = -1;
                 switched = true;
                 shortOver = false;
             }
         }else{
-            if(shortAvg[i] > longAvg[i]){
+            if(parseFloat(shortAvg[i]) > parseFloat(longAvg[i])){
                 //res[i] = 1;
+             //   console.log(i + "   ")
                 switched = true;
                 shortOver = true;
             }
         }
 
-        if(switched && shortOver && !hasbought){
+        if(switched == true && shortOver == true && hasbought == false){
             res[i] = 1;
             hasbought = true;
+           
             boughtPrice = curve.vals[i];
 
-        }else if(switched && !shortOver && hasbought){
+        }else if(switched == true && shortOver ==false && hasbought == true){
             res[i] = -1;
             hasbought = false;
             boughtPrice = NaN;
