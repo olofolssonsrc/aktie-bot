@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        canvas {          border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="1920" height="1080"></canvas>
+    <button onclick="taInData()">ta in data</button>
+    <label for="toggleCheckbox">Ta vs Buy And Hold      (ladda up data innan klickar checkbox)(funkar bara när hela perioden klickats i stockbot) (kan ej togglas, bara klicka en gång)</label>
+    <input type="checkbox" id="toggleCheckbox">
+
+    <script>
+
+        const checkbox = document.getElementById('toggleCheckbox');
+
+        ska = false;
+        var lastBuyAndHold = 0;
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+                ska = true;
+            } else {
+                ska = false;
+            }
+        //    console.log(lastBuyAndHold)
+            laddaData(jsonObj);
+            draw();
+        });
+
+        var jsonObj = null;
+
+        function taInData(){
+            navigator.clipboard.readText()
+                .then(text => {
+                    try {
+                        jsonObj = JSON.parse(text);
+                        //console.log(jsonObj)
+                        var vals = laddaData(jsonObj)
+                        draw(vals);
+                    } catch (err) {
+                        console.error('fail : ', err);
+                    }
+                })
+                .catch(err => {
+                    console.error('fail : ', err);
+                });
+        }
+
+        var max_val = -999999999;
+        var min_val = 999999999;
+        
+        function laddaData(data){
+            if(ska){
+                lastBuyAndHold = -data.bandh;
+            }else{
+                ska = 0;
+            }
+
+            var list = data.data;
+            var vals = [];
+            var längstaShortSide = 0;
+            for (let i = 0; i < list.length; i++) {
+                vals[i] = [];
+                for (let j = 0; j < list[i].length; j++) {
+
+                    vals[i][j] = parseFloat(list[i][j]);
+                    if(vals[i].length > längstaShortSide){
+                        längstaShortSide = vals[i].length;
+                    }
+                    if(vals[i][j] - lastBuyAndHold >= max_val - lastBuyAndHold){
+                        max_val = vals[i][j]- lastBuyAndHold;
+                        minj = j;
+                        mini = i;
+                    }
+                    if(vals[i][j] - lastBuyAndHold <= min_val - lastBuyAndHold){
+                        min_val = vals[i][j]- lastBuyAndHold;
+                        maxi = i;
+                        maxj = j;
+                    }
+                }
+            }
+            return vals
+        }
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        var kameraPos = [4, 4, 4]
+        var kameraRotCart = vektorAddition(vektorScala(kameraPos, -0.76), [0, 0, -2.0])
+       // var kameraRotCart = [-2, 0, 0.0]
+
+        var r = Math.sqrt(kameraRotCart[0]**2 + kameraRotCart[1]**2 + kameraRotCart[2]**2); 
+        var Theta = Math.acos(kameraRotCart[2] / r); 
+        var Phi = Math.atan2(kameraRotCart[1], kameraRotCart[0]); 
+
+        var scaler = 1;
+
+        var rau = scaler*Math.sin((Math.PI / 2) - Theta)*Math.cos(Phi + Math.PI);
+        var rbu = scaler*Math.sin((Math.PI / 2) - Theta)*Math.sin(Phi + Math.PI);
+        var rcu = scaler*Math.cos((Math.PI / 2) -Theta);
+
+        var rap = scaler*Math.sin((Math.PI / 2))*Math.cos(Phi + (Math.PI / 2));
+        var rbp = scaler*Math.sin((Math.PI / 2))*Math.sin(Phi + (Math.PI / 2));
+        var rcp = scaler*Math.cos((Math.PI / 2));
+
+        var vektorUpp = [rau, rbu, rcu];
+        var vektorPlane = [rap, rbp, rcp];
+
+        var skärmBredd = canvas.width;
+        var skärmHöjd = canvas.height;
+
+        let distmatrix = Array.from({ length: canvas.width + 1 }, () => Array(canvas.height + 1).fill(null));
+
+        var directionalLigit = [0,1 , 1];
+        directionalLigit = normaliseraVektor(directionalLigit)
+        var lightStrength = 1.0;
+
+        function createSquarePlane(subdivisions, baseVec1, baseVec2, renderingType, values){
+            let vertices = [];
+            let triangles = [];
+            let vertex_colors = []
+
+
+            for (let i = 0; i <= subdivisions; i++) {
+                for (let j = 0; j <= subdivisions; j++) {
+                    if (values[i] !== undefined && values[i][j] !== undefined) {
+
+                    let x = vektorScala(baseVec1, j);
+                    let y = vektorScala(baseVec2, i);
+
+                    vertices.push(vektorAddition(vektorAddition(x, y), [0, 0, (values[i][j] - min_val) / (max_val - min_val)]));
+
+
+                    let val = values[i][j];
+
+                    let relative_val = (val - min_val) / (max_val - min_val);
+
+               
+                    //NEdan inte använt
+                    let color;
+                    if (relative_val <= 0.5) {
+                        
+                        let t = relative_val * 2;
+                        color = [1.0 * (1.0 - t), 0.0, 0.0,  1.0];
+                    } else {
+                        
+                        let t = (relative_val - 0.5) * 2;
+
+                        color = [0.0, t, 0.0, 1.0];
+                    }
+
+                    vertex_colors.push(color);
+                    
+                }
+
+                    else {
+                 
+                        vertices.push([null, null, null]);
+                        vertex_colors.push([0.0, .5, 0.0, 1.0]);
+                    }
+                }
+            }
+
+            for (let i = 0; i < subdivisions; i++) {
+                for (let j = 0; j < subdivisions; j++) {
+
+                    if (
+                        values[i] !== undefined &&
+                        values[i][j] !== undefined &&
+                        values[i + 1] !== undefined &&
+                        values[i + 1][j] !== undefined &&
+                        values[i][j + 1] !== undefined &&
+                        values[i + 1][j + 1] !== undefined
+                    ) {
+
+                        let top_left = i * (subdivisions + 1) + j;
+                        let top_right = top_left + 1;
+                        let bottom_left = top_left + (subdivisions + 1);
+                        let bottom_right = bottom_left + 1;
+
+                        triangles.push([bottom_left, top_left, bottom_right]);
+                        triangles.push([top_left, top_right, bottom_right]);  
+                    }
+                }
+            }
+            return {
+                "renderingType": renderingType,
+                "vertices": vertices,
+                "triangles": triangles,
+                "vertex_colors": vertex_colors
+            };
+        }
+
+
+        function draw(vals){
+
+            var geoWidth = 3.5;
+            var geoHeight = 1;
+
+            let quote = geoWidth / 10;
+
+             let kvals = [ [ 23, 134, 23, 232,  0.234, -0.041343, -0.088981, -0.815017,  0.953995, -0.722189],
+            [-0.714049,  0.699547, -0.871743, -0.423098,  0.570301, -0.540716, -0.094154,  0.569461, -0.207518, -0.212378],
+            [-0.221345, -0.366100, -0.778342, -0.310938, -0.499983, -0.636243, -0.791448,  0.815894,  0.144797],
+            [ 0.655453, -0.085942,  0.991567, -0.605984,  0.329878,  0.689167,  0.625960, -0.576827],
+            [-0.558948, -0.137345, -0.091184,  0.140446,  0.438793,  0.397074,  0.208537],
+            [-0.208817, -0.893990,  0.164326,  0.384947, -0.167834,  0.444745],
+            [-0.488088,  0.756167, -0.726270, -0.987258,  0.076201],
+            [-0.784214, -0.405781, -0.644814 ],
+            [-0.856585,  0.825242 ],
+            [-0.790504]
+            ]
+
+            for (var i = 0; i < imageData.data.length; i += 4) {
+
+            const pixelIndex = i / 4;
+            const x = pixelIndex % canvas.width; 
+            const y = Math.floor(pixelIndex / canvas.width); 
+
+                imageData.data[i] = 255;
+                imageData.data[i + 1] = 255; 
+                imageData.data[i + 2] = 255; 
+                imageData.data[i + 3] = 255; 
+            }
+
+            for (var i = 0; i < distmatrix.length; i++) {
+                for (var j = 0; j < distmatrix[i].length; j++) {
+                    distmatrix[i][j] = null;
+                }
+            }
+
+            const f4 = createSquarePlane(vals.length, [geoWidth / vals.length, 0, 0],[0, geoWidth / vals.length, 0], "solid", vals);
+
+            var jsonobjs = [f4]
+
+
+            const objects = jsonobjs.map(v => createShape(v));
+
+            var sphere3Position = [0, 0, .5]
+            
+         //   updatePosition(objects[0], sphere3Position);
+
+
+            drawGrid([0, 0, 0], 10, [quote, 0, 0],[0, quote, 0], [110, 110, 110])
+            drawGrid([0, 0, 0], 10, [0, 0, .1],[0, quote, 0], [110, 110, 110])
+            drawGrid([0, 0, 0], 10, [0, 0, .1],[quote, 0, 0], [110, 110, 110])
+
+            colorMODE = 1;
+            drawShape(objects[0]);
+            colorMODE = 0;
+
+            let lines = [
+                [[0, 3.5, 0], [3.5, 3.5, 0], [204, 119, 34], [204, 119, 34], -.5, .5 , 5, 260, 40, "long moving average", true , false],
+                [[3.5, 0, 0], [3.5, 3.5, 0], [70, 130, 180], [70, 130, 180], .5, .5, 5 , 260, 10, "short moving average", true, false],
+                [ [0, 3.5, 1],[0, 3.5, 0], [50, 50, 50], [50, 50, 50], -1.1, 0, 5 , -Math.abs(max_val- min_val), max_val, "", true, true]
+            ];
+      //     
+            lines.forEach(line => {
+                let [p1, p2, c1, c2, offsetX, offsetY, subdiv, range, start, label] = line;
+                //console.log()
+                drawLine(p1, p2, c1, c2, true, true);
+                ctx.putImageData(imageData, 0, 0);
+            })
+
+
+            lines.forEach(line => {
+
+                let [p2, p1, c1, c2, offsetX, offsetY, subdiv, range, start, label, parseInt, dollar] = line;
+                let punkter = [p1, p2];
+                //let color = '#333333';
+
+                let [p1ScreenX, p1ScreenY] = projecttoScreen(p1);
+                let [p2ScreenX, p2ScreenY] = projecttoScreen(p2);
+
+                let distX = Math.round((p2ScreenX - p1ScreenX)) / subdiv;
+                let distY = Math.round((p2ScreenY - p1ScreenY)) / subdiv;
+
+                ctx.strokeStyle = c1;
+                ctx.lineWidth = 3;
+
+                ctx.font = '17px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                function rgbToFillStyle(rgbArray) { const [r, g, b] = rgbArray; return `rgb(${r}, ${g}, ${b})`; }
+
+                for (let i = subdiv; i >= 0 ; i--) {
+                    ctx.beginPath();
+                    ctx.arc(Math.round(p1ScreenX + i * distX), Math.round(p1ScreenY + i * distY), 2, 0, 2 * Math.PI);
+                    ctx.fillStyle = rgbToFillStyle(c1);
+                    ctx.fill();
+                    if(dollar){
+
+                        ctx.fillText((start + (subdiv - i) * (range / subdiv)).toFixed(0) + "$", p1ScreenX + i * distX + 30 * offsetX, p1ScreenY + i * distY + 30 * offsetY);
+                    }else{
+                        ctx.fillText((start + (subdiv - i) * (range / subdiv)).toFixed(0), p1ScreenX + i * distX + 30 * offsetX, p1ScreenY + i * distY + 30 * offsetY);
+                    }
+
+                }
+                ctx.font = '25px Arial';
+                if (label) {
+                    const x = p1ScreenX + (p2ScreenX - p1ScreenX) / 2 + 110 * offsetX;
+                    const y = p1ScreenY + (p2ScreenY - p1ScreenY) / 2 + 110 * offsetY;
+
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(Math.atan(distY / distX));
+                    ctx.fillText(label, 0, 0);
+                    ctx.restore();
+                }
+
+            });
+
+   
+
+    }
+
+        var objIdCounter = 0;
+
+        function nextId(){
+            return objIdCounter++;
+        }
+
+        function createShape(shape){
+
+            var triangles = shape.triangles;
+            var vertices = shape.vertices;
+            var vertexColors = shape.vertex_colors;
+            var trianglesFinal = [];
+            var colorsFinal = [];
+
+            for (let i = 0; i < triangles.length; i++) {
+
+                [v0, v1, v2] = triangles[i];
+                var triangle = [vertices[v0], vertices[v1], vertices[v2]];
+                var colors = [vertexColors[v0].map(v => v * 255), vertexColors[v1].map(v => v * 255), vertexColors[v2].map(v => v * 255)];
+                trianglesFinal.push(triangle);
+                colorsFinal.push(colors);
+            }
+
+            var faceNormals = []
+
+            faceNormals = createNormals(trianglesFinal)
+
+          //  console.log(faceNormals)
+
+            let vertexNormals;
+
+            if (shape.shading === "smooth") {
+                vertexNormals = createVertexNormals(faceNormals, trianglesFinal);
+            } else {
+                vertexNormals = createVertexNormalsFlatShade(faceNormals);
+            }
+
+            let grid = "solid";
+            if(shape.renderingType == "grid"){
+                grid = "grid"
+            }
+
+           // console.log(verte)
+
+            return [nextId(), trianglesFinal, colorsFinal, faceNormals, vertexNormals, grid]
+        }
+
+        function changeCameraRotation(rot){
+
+            kameraRotCart = rot
+
+            r = Math.sqrt(kameraRotCart[0]**2 + kameraRotCart[1]**2 + kameraRotCart[2]**2); 
+            Theta = Math.acos(kameraRotCart[2] / r); 
+            Phi = Math.atan2(kameraRotCart[1], kameraRotCart[0]); 
+
+            rau = scaler*Math.sin((Math.PI / 2) - Theta)*Math.cos(Phi + Math.PI);
+            rbu = scaler*Math.sin((Math.PI / 2) - Theta)*Math.sin(Phi + Math.PI);
+            rcu = scaler*Math.cos((Math.PI / 2) -Theta);
+
+            rap = scaler*Math.sin((Math.PI / 2))*Math.cos(Phi + (Math.PI / 2));
+            rbp = scaler*Math.sin((Math.PI / 2))*Math.sin(Phi + (Math.PI / 2));
+            rcp = scaler*Math.cos((Math.PI / 2));
+
+            vektorUpp = [rau, rbu, rcu];
+            vektorPlane = [rap, rbp, rcp];
+        }
+
+        function changeCameraPosition(pos){
+            kameraPos = pos
+        }
+
+        //assume each vertex has the face normal atm
+        function createNormalColors(normals){
+
+            colors = normals.map(t => {
+                var test2 =  t.map(at => {
+                    
+                    return parseInt(at * 127.5 + 127.5);
+                })   
+                return [test2, test2, test2];                
+            })
+            return colors;
+        }
+
+        //facenormals
+        function createNormals(triangles){
+            var normals = triangles.map(v => {
+                let [v0, v1, v2] = v;
+                var e1 = vektorSubtraction(v1, v0);
+                var e2 = vektorSubtraction(v2, v1);
+                var final = kryssProdukt(e1, e2)
+                return normaliseraVektor(final);
+            })
+            return normals;
+        }
+
+        //tar in facenormals, och trianglarna för ett objekt. Och skapar enlist med vertexnormals för varje triangl.
+        function createVertexNormals(faceNormals, finalTriangles){
+
+            const vertexToNormal = {};
+
+            for (let i = 0; i < finalTriangles.length; i++) {
+
+                const faceNorm = faceNormals[i];
+                const vertices = finalTriangles[i]; 
+
+                vertices.forEach(vertex => {
+                    const key = vertex.toString();
+                    if (!vertexToNormal[key]) {
+                        vertexToNormal[key] = [0, 0, 0]; 
+                    }
+                    vertexToNormal[key] = vektorAddition(vertexToNormal[key], faceNorm);
+                });
+            }
+            
+            return finalTriangles.map(tri => {
+                return tri.map(v => {
+                    return normaliseraVektor(vertexToNormal[v.toString()]);
+                })
+            })
+        }
+
+        function createVertexNormalsFlatShade(faceNormals, finalTriangles){
+
+            return faceNormals.map(norm => {return [norm, norm, norm]})
+        }
+
+        function drawGrid(startPos, subdivisions, baseVec1, baseVec2, color) {
+            for (let i = 0; i <= subdivisions; i++) {
+                // Compute the start and end points for lines along `baseVec1`
+                let startLine1 = [
+                    startPos[0] + i * baseVec1[0],
+                    startPos[1] + i * baseVec1[1],
+                    startPos[2] + i * baseVec1[2]
+                ];
+                let endLine1 = [
+                    startLine1[0] + subdivisions * baseVec2[0],
+                    startLine1[1] + subdivisions * baseVec2[1],
+                    startLine1[2] + subdivisions * baseVec2[2]
+                ];
+
+                // Compute the start and end points for lines along `baseVec2`
+                let startLine2 = [
+                    startPos[0] + i * baseVec2[0],
+                    startPos[1] + i * baseVec2[1],
+                    startPos[2] + i * baseVec2[2]
+                ];
+                let endLine2 = [
+                    startLine2[0] + subdivisions * baseVec1[0],
+                    startLine2[1] + subdivisions * baseVec1[1],
+                    startLine2[2] + subdivisions * baseVec1[2]
+                ];
+
+                // Draw the lines directly
+                drawLine(startLine1, endLine1, color, color); // Line along baseVec1
+                drawLine(startLine2, endLine2, color, color); // Line along baseVec2
+            }
+        }
+
+
+        function drawShape(obj){
+
+            var id = obj[0];
+            var triangles = obj[1];
+            var colors  = obj[2];
+            var normal = obj[3];
+            var vertexNormals = obj[4];
+            if(obj[5] == "grid"){
+                for(var i = 0; i < triangles.length; i++){
+                drawTriangleLine(triangles[i], colors[i], normal[i], vertexNormals[i])
+            }
+            }else{
+                for(var i = 0; i < triangles.length; i++){
+                drawTriangle(triangles[i], colors[i], normal[i], vertexNormals[i])
+            }
+            }
+
+        }
+       
+        function updatePosition(object, posTransform){
+            var triangles = object[1];
+            triangles = triangles.map(tri => {
+                return tri.map(v => {
+                    return vektorAddition(v, posTransform)
+                })
+            }) 
+            object[1] = triangles;
+        }
+
+        function rotateVectorAroundXAxis(v, angle) {
+            const cosTheta = Math.cos(angle);
+            const sinTheta = Math.sin(angle);
+
+            const rotationMatrix = [
+                [1, 0, 0],
+                [0, cosTheta, -sinTheta],
+                [0, sinTheta, cosTheta]
+            ];
+
+            const rotatedVector = [
+                rotationMatrix[0][0] * v[0] + rotationMatrix[0][1] * v[1] + rotationMatrix[0][2] * v[2],
+                rotationMatrix[1][0] * v[0] + rotationMatrix[1][1] * v[1] + rotationMatrix[1][2] * v[2],
+                rotationMatrix[2][0] * v[0] + rotationMatrix[2][1] * v[1] + rotationMatrix[2][2] * v[2]
+            ];
+
+            return rotatedVector;
+        }
+
+        function rotateVectorAroundYAxis(v, angle) {
+            const cosTheta = Math.cos(angle);
+            const sinTheta = Math.sin(angle);
+
+            const rotationMatrix = [
+                [cosTheta, 0, sinTheta],
+                [0, 1, 0],
+                [-sinTheta, 0, cosTheta]
+            ];
+
+            const rotatedVector = [
+                rotationMatrix[0][0] * v[0] + rotationMatrix[0][1] * v[1] + rotationMatrix[0][2] * v[2],
+                rotationMatrix[1][0] * v[0] + rotationMatrix[1][1] * v[1] + rotationMatrix[1][2] * v[2],
+                rotationMatrix[2][0] * v[0] + rotationMatrix[2][1] * v[1] + rotationMatrix[2][2] * v[2]
+            ];
+
+            return rotatedVector;
+        }
+
+        function rotateVectorAroundZAxis(v, angle) {
+            const cosTheta = Math.cos(angle);
+            const sinTheta = Math.sin(angle);
+
+            const rotationMatrix = [
+                [cosTheta, -sinTheta, 0],
+                [sinTheta, cosTheta, 0],
+                [0, 0, 1]
+            ];
+
+            const rotatedVector = [
+                rotationMatrix[0][0] * v[0] + rotationMatrix[0][1] * v[1] + rotationMatrix[0][2] * v[2],
+                rotationMatrix[1][0] * v[0] + rotationMatrix[1][1] * v[1] + rotationMatrix[1][2] * v[2],
+                rotationMatrix[2][0] * v[0] + rotationMatrix[2][1] * v[1] + rotationMatrix[2][2] * v[2]
+            ];
+
+            return rotatedVector;
+        }
+
+        function drawTriangleLine(triangle, vertexColors, faceNormal, vertexNormals){
+      
+            var pixelCords = triangle.map(v => {
+                let [x, y, dist] = projecttoScreen(v)
+                return [parseInt(x), parseInt(y), dist]
+            });
+
+            var [a, b, c] = pixelCords
+
+            var ab = getLinePixels(a[0], a[1], b[0], b[1], vertexColors[0], vertexColors[1], a[2], b[2], 1, 1)
+            var bc = getLinePixels(b[0], b[1], c[0], c[1], vertexColors[1], vertexColors[2], b[2], c[2], 1, 1)
+            var ac = getLinePixels(a[0], a[1], c[0], c[1], vertexColors[0], vertexColors[2], a[2], c[2], 1, 1)
+
+
+            var maxY = Math.max(a[1], b[1], c[1]);
+            var minY = Math.min(a[1], b[1], c[1]);
+
+            for(var y = minY; y <= maxY; y++){
+
+
+                var values = [
+                    ...(bc?.vals?.[y]?.map(value => value) || []),
+                    ...(ac?.vals?.[y]?.map(value => value) || []),
+                    ...(ab?.vals?.[y]?.map(value => value) || [])
+                ];
+
+                var lastXPixel = undefined;
+                var lastColor = undefined;
+                var lastDist = undefined;
+
+                for(var i = 0; i < values.length; i++){
+
+                    var x = values[i][0]
+                    let [r, g, b] = values[i][1]
+                    var dist = values[i][2];
+
+                    
+                    var x = values[i][0]
+                    let index = (y * canvas.width + x) * 4;  
+
+                    if(x <= skärmBredd && y <= skärmHöjd && x >= 0 && y >= 0){
+                        if(dist < distmatrix[x][y] || distmatrix[x][y] == null){
+                            imageData.data[index] = r;
+                            imageData.data[index + 1] = g;
+                            imageData.data[index + 2] = b;
+                            imageData.data[index + 3] = 255;
+                            distmatrix[x][y] = dist;
+                        }
+                    }
+                    lastXPixel = x;
+                    lastColor = [r, g, b];
+                    lastDist = dist;
+                    
+                }
+            }
+
+
+        }
+
+        function drawLine(p1, p2, aColor, bColor, thick = false, overwrite = false){
+            var a = projecttoScreen(p1)
+            var b = projecttoScreen(p2)
+
+            var ab = getLinePixels(a[0], a[1], b[0], b[1], aColor, bColor, a[2], b[2], 1, 1, thick)
+
+            var maxY = Math.round(Math.max(a[1], b[1]));
+            var minY = Math.round(Math.min(a[1], b[1]));
+        
+            for(var y = minY; y <= maxY; y++){
+                var values = [];
+                if (ab.vals[y] === undefined) {
+                    values = [];
+                }else{
+                    values = ab.vals[y]
+                }
+
+                var lastXPixel = undefined;
+                var lastColor = undefined;
+                var lastDist = undefined;
+
+                for(var i = 0; i < values.length; i++){
+
+                    var x = values[i][0]
+                    let [r, g, b] = values[i][1]
+                    var dist = values[i][2];
+
+                    
+                    var x = values[i][0]
+                    let index = (y * canvas.width + x) * 4;  
+
+                    if(x <= skärmBredd && y <= skärmHöjd && x >= 0 && y >= 0 || overwrite){
+                        if(dist < distmatrix[x][y] || distmatrix[x][y] == null || overwrite){
+
+                            imageData.data[index] = r;
+                            imageData.data[index + 1] = g;
+                            imageData.data[index + 2] = b;
+                            imageData.data[index + 3] = 255;
+                            distmatrix[x][y] = dist;
+                        }
+                    }
+                    lastXPixel = x;
+                    lastColor = [r, g, b];
+                    lastDist = dist;
+                    
+                }
+            }
+        }
+
+        function drawTriangle(triangle, vertexColors, faceNormal, vertexNormals){
+
+            var vectest = vektorSubtraction(kameraPos, vektorScala(vektorAddition(triangle[2], vektorAddition(triangle[0], triangle[1])), 1 / 3))
+
+            //Om triangel har riktning bort från kamera behöver den inte renderas
+            if(dotprodukt(vectest, faceNormal) < -1 ){
+                return
+            }
+
+            var pixelCords = triangle.map(v => {
+                let [x, y, dist] = projecttoScreen(v)
+                return [parseInt(x), parseInt(y), dist]
+            });
+            var [a, b, c] = pixelCords
+
+            var vertexLightIntensity = triangle.map(v => {
+                return v[2]
+               // return  0.5*(dotprodukt(v, directionalLigit) + 1)
+            })   
+
+            //Bör kommenteras och egentligen göras om till tydligare
+            var ab = getLinePixels(a[0], a[1], b[0], b[1], vertexColors[0], vertexColors[1], a[2], b[2], vertexLightIntensity[0], vertexLightIntensity[1])
+            var bc = getLinePixels(b[0], b[1], c[0], c[1], vertexColors[1], vertexColors[2], b[2], c[2], vertexLightIntensity[1], vertexLightIntensity[2])
+            var ac = getLinePixels(a[0], a[1], c[0], c[1], vertexColors[0], vertexColors[2], a[2], c[2], vertexLightIntensity[0], vertexLightIntensity[2])
+
+            var maxY = Math.max(a[1], b[1], c[1]);
+            var minY = Math.min(a[1], b[1], c[1]);
+
+                for(var y = minY; y <= maxY; y++){
+                    var values = [
+                        ...(bc?.vals?.[y]?.map(value => value) || []),
+                        ...(ac?.vals?.[y]?.map(value => value) || []),
+                        ...(ab?.vals?.[y]?.map(value => value) || [])
+                    ];
+
+                    var lastXPixel = undefined;
+                    var lastColor = undefined;
+                    var lastDist = undefined;
+
+                    for(var i = 0; i < values.length; i++){
+
+                        var x = values[i][0]
+                        let [r, g, b] = values[i][1]
+                        var dist = values[i][2];
+
+                        if(Math.abs(lastXPixel - x) > 1){
+                            interPretBetweenPixelsX(x, lastXPixel, [r, g, b], lastColor, dist, lastDist)
+                        }else{
+                        
+                            var x = values[i][0]
+                            let index = (y * canvas.width + x) * 4;  
+
+                            if(x <= skärmBredd && y <= skärmHöjd && x >= 0 && y >= 0){
+                                if(distmatrix[x] == undefined){
+                                    
+                                }else if(distmatrix[x][y] == null || dist < distmatrix[x][y]){
+                                    imageData.data[index] = r;
+                                    imageData.data[index + 1] = g;
+                                    imageData.data[index + 2] = b;
+                                    imageData.data[index + 3] = 255;
+                                    distmatrix[x][y] = dist;
+                                } 
+
+                            }
+                            lastXPixel = x;
+                            lastColor = [r, g, b];
+                            lastDist = dist;
+                        }
+                    }
+                }
+
+
+            function interPretBetweenPixelsX(startX, endX, color1, color2, dist1, dist2) {
+
+                //avstånd i pixlar
+                const dist = Math.abs(endX - startX);
+                var direction = 1;
+
+                if(endX < startX){
+                    direction *= -1;
+                }
+
+                const [r1, g1, b1] = color1;
+                const [r2, g2, b2] = color2;
+
+                const rdist = (r2 - r1) / (dist);
+                const gdist = (g2 - g1) / dist;
+                const bdist = (b2 - b1) / dist;
+
+                for (let i = 0; i <= dist; i++) {
+
+                    const x = startX + i*direction;
+
+                    var quotien = i / dist;
+                    var quotien2 = 1 - quotien;
+                    var dist3D = dist1 * quotien2 + dist2 * quotien;
+                    
+
+                    if(x <= skärmBredd && y <= skärmHöjd && x >= 0 && y >= 0){
+
+                        if(distmatrix[x] == undefined){
+                           
+                        }else if(dist3D < distmatrix[x][y] || distmatrix[x][y] == null){
+                            const r = parseInt(r1 + rdist * i);
+                            const g = parseInt(g1 + gdist * i);
+                            const b = parseInt(b1 + bdist * i);
+
+                            const index = (y * canvas.width + x) * 4;
+
+                            imageData.data[index] = r;
+                            imageData.data[index + 1] = g;
+                            imageData.data[index + 2] = b;
+                            imageData.data[index + 3] = 255;
+                            distmatrix[x][y] = dist3D;
+                        }
+                    }
+                }
+            }
+        }
+
+        //Antal pixlar som behövs mella två punkter i planet linje
+        function calculatePixels(x1, y1, x2, y2) {
+
+            const dx = Math.abs(x2 - x1);
+            const dy = Math.abs(y2 - y1);
+
+            const numberOfPixels = Math.max(dx, dy) + 1;
+
+            return numberOfPixels;
+        }
+
+        var colorMODE = 0;
+
+        //bresenham baserad
+        function getLinePixels(x0, y0, x1, y1, color1, color2, dist1, dist2, vInst1, vInst2, thick = false) {
+            
+            let [r1, g1, b1] = color1;
+            let [r2, g2, b2] = color2;
+
+            var totalNeeded = calculatePixels(x0, y0, x1, y1)
+
+
+            x0 = Math.round(x0);
+            y0 = Math.round(y0);
+            x1 = Math.round(x1);
+            y1 = Math.round(y1);
+
+            var res = {};
+
+            var dx = Math.abs(x1 - x0)
+            var sx = x0 < x1 ? 1 : -1
+
+            var dy = -Math.abs(y1 - y0)
+            var sy = y0 < y1 ? 1 : -1
+
+            var error = dx + dy
+
+            var i = 0
+
+            while (true) {
+
+                var quotient = i / totalNeeded;
+                var quotient2 = 1 - quotient;
+
+                var intensity = vInst1 * quotient2 + vInst2 * quotient;
+
+                var color = [];
+                if(colorMODE == 0){
+                    var basecolor = [
+                        r1 * quotient2 + r2 * quotient, 
+                        g1 * quotient2 + g2 * quotient, 
+                        b1 * quotient2 + b2 * quotient 
+                    ];
+
+                    var intensity = vInst1 * quotient2 + vInst2 * quotient;
+
+                    color = [
+                        basecolor[0] * intensity + intensity * 70, 
+                        basecolor[1] * intensity + intensity * 70, 
+                        basecolor[2] * intensity + intensity * 70  
+                    ];
+
+                }else{                    
+                    
+                    var actualVal = min_val + ((max_val - min_val)) * intensity;
+                    var basecolor = [];
+
+                    if(actualVal < 0){
+                        basecolor = [
+                        255 * ((Math.abs(actualVal)) / Math.max(max_val,  Math.abs(min_val))), 
+                        0, 
+                        0 
+                    ];
+                    }else{
+                        basecolor = [
+                        0, 
+                        255 * ((Math.abs(actualVal)) / Math.max(max_val,  Math.abs(min_val))),  
+                        0 
+                    ];
+                    }
+
+                    color = [
+                        basecolor[0], 
+                        basecolor[1], 
+                        basecolor[2]  
+                    ];
+                }
+
+
+                var dist = dist1 * quotient2 + dist2 * quotient;
+                    
+                if(res[y0] == undefined){
+                    res[y0] = [[x0, color, dist]];
+                }else{
+                    res[y0].push([x0, color, dist])
+                }      
+
+                if(thick){
+
+                    for (let dx = 0; dx <= 1; dx++) {
+                        for (let dy = 0; dy <= 1; dy++) {
+                            let newX = x0 + dx;
+                            let newY = y0 + dy;
+                            if (res[newY] === undefined) {
+                                res[newY] = [];
+                            }
+                            res[newY].push([newX, color, dist]);
+                        }
+                    }
+
+                }
+
+
+                
+                
+                if (x0 == x1 && y0 == y1) {
+                    break;
+                }
+
+                var e2 = 2 * error
+                if (e2 >= dy ) {
+                    error += dy
+                    x0 += sx
+                }
+                if (e2 <= dx) {
+                    error += dx
+                    y0 += sy
+                }
+                i++;
+
+            }            
+
+
+            var resres = {
+                vals: res,      
+                length: i  
+            };
+
+            return resres
+        }
+
+        function projecttoScreen(coord){
+
+            var relativKamPos = vektorSubtraction(coord, kameraPos)
+
+            var vb = projektion(relativKamPos, kameraRotCart);
+
+            //Tänk över denna
+
+            var dist = vektorMagnitud(vb)
+
+            if(dotprodukt(vb, kameraRotCart) < 0){
+
+                dist *= 1;
+            }
+
+            if(dotprodukt(vb, kameraRotCart) > 0){
+
+                vb = vektorScala(vb, 1)
+            }
+
+            var vDist = vektorSubtraction(relativKamPos, vb);
+
+            Xvector = projektion(vDist, vektorPlane);
+            Yvector = projektion(vDist, vektorUpp);            
+
+            var magXvektor = -vektorMagnitud(Xvector) ;
+            var magYvektor = vektorMagnitud(Yvector) ;
+
+            
+            if(dotprodukt(Xvector, vektorPlane) > 0){
+                magXvektor *= -1;
+            }
+            
+            if(dotprodukt(Yvector, vektorUpp) > 0){
+                magYvektor *= -1;
+            }
+
+            var fovY = 5;
+
+            var uvx = (magXvektor / (fovY*(skärmBredd / skärmHöjd)));
+            var uvy = (magYvektor / (fovY));
+
+            uvx += 0.5;
+            uvy += 0.5;
+
+            var screenX = skärmBredd * uvx;
+            var screenY = skärmHöjd * uvy;
+
+            return [screenX, screenY, dist]
+        }
+
+        function kryssProdukt(a, b) {
+            return [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            ];
+        }
+
+        function normaliseraVektor(a) {
+
+            var magnitude = vektorMagnitud(a);
+            
+            if (magnitude === 0) {
+                return a;
+            }
+            
+            return vektorScala(a, 1 / magnitude);
+        }
+
+        //Magnitud av vector. 
+        function vektorMagnitud(a){
+
+            var acc = 0;
+            for (let i = 0; i < a.length; i++) {
+            
+                acc += Math.pow(a[i], 2);
+                                
+            }
+            return Math.sqrt(acc)
+        }
+
+        //skalning av vector. 
+        function vektorScala(a, scal){
+
+            var res = [];
+            for (var i = 0; i < a.length; i++) {
+                res[i] = a[i]*scal;    
+            }
+            return res;
+        }
+
+        //Enkel addition a + b
+        function vektorAddition(a, b){
+
+            var res = [];
+            for (var i = 0; i < a.length; i++) {
+                res[i] = a[i] + b[i];    
+            }
+            return res;
+        }
+
+
+
+        //Enkel subtraktion a - b
+        function vektorSubtraction(a, b){
+
+            var res = [];
+            for (var i = 0; i < a.length; i++) {
+                res[i] = a[i] - b[i];    
+            }
+            return res;
+        }
+
+
+        //Enkel vektor projection. vektor a projeceras på vector be.
+        function projektion(a, b){
+            var scal = dotprodukt(a,b) / dotprodukt(b,b);
+            var res = [];
+            for (var i = 0; i < a.length; i++) {
+                res[i] = b[i]*scal;    
+            }
+            return res;
+        }
+
+        //enkel dotprodukt för vektorere
+        function dotprodukt(a, b){
+            var acc = 0;
+            for (var i = 0; i < a.length; i++) {
+                acc += a[i]*b[i];                        
+            }    
+          return acc;   
+        }       
+    </script>
+</body>
+</html>
