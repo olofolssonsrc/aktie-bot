@@ -67,12 +67,12 @@
         <div id="v2ochExp" style="padding: 5px; background-color: salmon; border-radius: 5px;">
 
         <label for="mySlider">stopVinst</label>
-        <input type="range" min="1" max="1000" step="1" value="500" class="slider" id="mySlider">
-        <span id="sliderValue">500</span>
+        <input type="range" min="1" max="1.3" step="0.001" value="1.03" class="slider" id="mySlider">
+        <span id="sliderValue">1.03</span>
         <br> <br>
         <label for="mySlider2">stopLoss</label>
-        <input type="range" min="1" max="1000" step="1" value="500" class="slider" id="mySlider2">
-        <span id="sliderValue2">500</span>
+        <input type="range" min="1" max="1.3" step="0.001" value="1.03" class="slider" id="mySlider2">
+        <span id="sliderValue2">1.03</span>
         <br> <br>
         <label for="mySlider3">kort slider length</label>
         <input type="range" min="1" max="1000" step="1" value="40" class="slider" id="mySlider3">
@@ -140,7 +140,7 @@ checkbox.addEventListener("change", function() {
 const checkbox2 = document.getElementById("myCheckbox2");
 
 checkbox2.addEventListener("change", function() {
-   // console.log("123123")
+
     if (checkbox2.checked) {
         relative=true;
     } else {
@@ -190,10 +190,7 @@ function korTest(){
   
 
             resrestres = basicSlidAvgBot2(mainCurve, 1.15, 1.15, j*factor, i*factor);
-       //     console.log(j*factor+ "  " + i*factor)
-            testData[i - testRangeStartLong][j - shortRangeStart] = getFinalVärde(mainCurve, resrestres);
-         //   console.log(j + "   " + i + "     " +  testData[i][j])
-           // console.log(testData[i][j]);
+
         }   
     }*/
 
@@ -209,10 +206,8 @@ function korTest(){
     if(document.getElementById("hela_perioden").checked){
         testLängd = mainCurve.vals.length;
 //document.getElementById(period_length).value = testLängd
-        //console.log("123")
     }
 
-    console.log(testLängd);
 
     for (let k = 0; k < antalTest; k++) {
 
@@ -237,15 +232,13 @@ function korTest(){
             }
             for (let j = 10; j <= maxmaxmax; j++) {
 
-                resrestres = basicSlidAvgBot2(newCurve, 1000, 1000, j, i);
-                //   console.log(j*factor+ "  " + i*factor)
+                resrestres = basicSlidAvgBot2(newCurve, stopLoss, stopWin, j, i);
                 if(k == 0){
                     testData[i - longStart][j - shortStart] = getFinalVärde(newCurve, resrestres) / antalTest;
                 }else{
                     testData[i - longStart][j - shortStart] += getFinalVärde(newCurve, resrestres) / antalTest;
                 }
-                // console.log(j + "   " + i + "     " +  testData[i][j])
-                //console.log(testData[i][j]);
+
             }   
     }
         
@@ -264,8 +257,6 @@ function korTest(){
     }
 
 
-    //console.log(testData.length + "    " + testData[0].length)
-
     json = {
         data : testData,
         shortStart : shortStart,
@@ -276,7 +267,6 @@ function korTest(){
     }
 
     var jsonString = JSON.stringify(json);
-  //  console.log(testData)
     navigator.clipboard.writeText(jsonString)
     .then(() => {
         alert('sparat');
@@ -288,6 +278,7 @@ function korTest(){
 
 
 function reCalcCurves(){
+
 
     var resrestres = [];
     switch (bottype) {
@@ -314,6 +305,15 @@ function reCalcCurves(){
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+
+    var temp = ctx.fillStyle;
+    ctx.fillStyle = 'white'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = temp
+
+
+
     drawCurve(mainCurve, 0, mainCurve.vals.length - 1, "MediumSeaGreen", true)
     drawCurve(slidingAvg1, slider3val, mainCurve.vals.length - 1, "orange", false)
     drawCurve(slidingAvg2, slider4val, mainCurve.vals.length - 1,"red", false)
@@ -451,7 +451,6 @@ function basicSlidAvgBot(curve){
 
     shortAvg = slideAvg(curve.vals, 40);
     longAvg = slideAvg(curve.vals, 140);
-   // console.log(shortAvg[10])
     var shortOver = false;
 
     if(shortAvg[141] > longAvg[141]){
@@ -480,10 +479,9 @@ function is3PercentLarger(number1, number2, x) {
     return number2 > number1 * x;
 }
 function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
-   // console.log(curve + " " +stopWin+ " " + stopLoss+" " +shortLEngth+ " " + långLength)
+
     var res = [curve.vals.length]
 
-    //console.log(curve)
     shortAvg = slideAvg(curve.vals, shortLEngth);
     longAvg = slideAvg(curve.vals, långLength);
 
@@ -493,7 +491,6 @@ function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
 
     if(shortAvg[parseInt(långLength) + 1] > longAvg[parseInt(långLength) + 1]){
         shortOver = true;
-        //console.log(långLength + "   ")
     }
     var boughtPrice = NaN;
     for(var i = parseInt(långLength) + 1; i < curve.vals.length; i++){
@@ -502,15 +499,11 @@ function basicSlidAvgBot2(curve, stopWin, stopLoss, shortLEngth, långLength){
 
         if(shortOver){
             if(parseFloat(shortAvg[i]) < parseFloat(longAvg[i])){
-               
-                //res[i] = -1;
                 switched = true;
                 shortOver = false;
             }
         }else{
             if(parseFloat(shortAvg[i]) > parseFloat(longAvg[i])){
-                //res[i] = 1;
-             //   console.log(i + "   ")
                 switched = true;
                 shortOver = true;
             }
@@ -621,15 +614,11 @@ function slideAvg(indata, längd){
     for(var j = parseInt(längd) + 1; j < indata.length; j++){
         res[j] = parseFloat((res[j - 1] + indata[j]/längd - indata[j - längd]/längd).toFixed(3));
     }
-    //console.log(res)
     return res;
 }
 
 function slideAvgExp(indata, längd, vikt){
 
-   // console.log(indata)
-   // console.log(längd)
-  //  console.log(vikt)
     var res= [];
     var alfa = 2/((längd + 1)*vikt)
 
@@ -644,16 +633,11 @@ function slideAvgExp(indata, längd, vikt){
     res[längd] = parseFloat(init.toFixed(3));
 
     for(var j = parseInt(längd) + 1; j < indata.length; j++){
-       // console.log(alfa + " " + indata[j] + " " + res[j - 1])
-
         res[j] = parseFloat((alfa*indata[j] + (1 - alfa)*res[j - 1]).toFixed(3));
-        
     }
     
     return res;
 }
-
-
 
 
 //Används för att välja färg för kurvor. Borde ej vara random egentligen
@@ -668,13 +652,24 @@ function getRandomColor() {
 }
 
 
+function logFunc(x){
+
+    return logBase(x*1 + 1, 2) / logBase(2, 2);
+}
+
+function logBase(x, base) {
+    return Math.log(x) / Math.log(base);
+}
+
+
 //ritar ut en kurva Startindex och slutindex är möjligtvis buggiga 
 function drawCurve(curve, startIndex, endIndex, color, start){
 
 ctx.strokeStyle = color;
+
+
 ctx.lineWidth = 1;
 
-//console.log(curve)
 var testVar = 75;
 var vals = curve.vals;
 var highest = curve.highest;
@@ -687,14 +682,20 @@ datapointWidth = endIndex - startIndex;
 deltaX = 900 / vals.length;
 
 var procentInPrice = ((curve.vals[0] - lowest) / diffY);
+procentInPrice = Math.sqrt(logFunc(procentInPrice, 2))
 var procentInPixel = (50 + 400 * procentInPrice);
+
+
 
 ctx.beginPath();
 ctx.moveTo(testVar, 500 - procentInPixel);
 
 for(var i = 1; i < endIndex; i++){
 
-    procentInPrice = (curve.vals[i] - lowest) / diffY;
+    procentInPrice = (curve.vals[i] - lowest) / (diffY);
+
+    procentInPrice = Math.sqrt(logFunc(procentInPrice ,2))
+
     procentInPixel = 50 + 400 * procentInPrice;
     ctx.lineTo(testVar+ i * deltaX, 500 - procentInPixel);
 }
@@ -707,40 +708,101 @@ if(start == true){
 ctx.strokeStyle = 'gray';
 ctx.lineWidth = 1;
 ctx.strokeRect(testVar, 25, 900, 450);
-ctx.strokeStyle = '#1111BB';
-procentInPrice = (curve.vals[0] - lowest) / diffY;
-procentInPixel = 50 + 400 * procentInPrice;
-ctx.beginPath();
-ctx.moveTo(testVar, 500 - procentInPixel);
-ctx.lineTo(975, 500 - procentInPixel)
-ctx.stroke();
 
-ctx.setLineDash([5, 5]);
-ctx.strokeStyle = 'gray';
-procentInPrice = (curve.vals[0] - lowest) / diffY;
-procentInPixel1 = 50;
-procentInPixel2 = 450;
-ctx.beginPath();
-ctx.moveTo(975, 500 - procentInPixel1);
-ctx.lineTo(testVar, 500 - procentInPixel1)
-ctx.moveTo(975, 500 - procentInPixel2);
-ctx.lineTo(testVar, 500 - procentInPixel2)
-ctx.stroke();
-
-ctx.setLineDash([]);
 ctx.strokeStyle = 'black';
-var numberOfTicks = 9;
-var spaceBetweenTicks = 44;
-var startX = 975;
-var startY = 50;
-var lineLength = 5;
-ctx.strokeStyle = 'black';
-ctx.beginPath();
-ctx.moveTo(startX, startY);
-ctx.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
-ctx.stroke();
 
-var deltaCOOL = (highest - lowest) / numberOfTicks
+
+var years = 10;
+var months = 0;
+var days = 0;
+
+var yearIndexShow = 1;
+var monthIndexShow = 3;
+
+var startYear = 2010;
+var numberofMonth = parseInt(years * 12) + months;
+
+var distxx = (975 - testVar) / numberofMonth;
+var dayoffset = (days / 30)*distxx;
+
+var yearCount = 0;
+
+for (let i = 0; i <= numberofMonth; i++) {
+
+    var xpos =  testVar + distxx*i + dayoffset;
+    if(xpos > 975){
+        break;
+    }
+
+    if(parseInt((i + months) - 0) % 12 == 0 && yearCount % yearIndexShow == 0){
+     //   console.log(((i + months) % 12) + "   " + (startYear + yearCount))
+        
+        ctx.beginPath();
+        ctx.moveTo(xpos, 475);
+        ctx.lineTo(xpos, 482)
+        ctx.stroke(); 
+
+        ctx.font = "12px Arial"; 
+        var txt = (startYear + yearCount )+" ";
+        let textWidth = ctx.measureText(txt).width;
+        ctx.fillText(txt, testVar + distxx * i + dayoffset - textWidth*0.5, 493)
+
+    }else if(i % monthIndexShow == 0){
+        ctx.beginPath();
+        ctx.moveTo(xpos, 475);
+        ctx.lineTo(xpos, 478)
+        ctx.stroke(); 
+    }
+
+    if(parseInt((i + months) - 0) % 12 ==0 ){
+        yearCount += 1;
+    }
+    
+
+
+}
+
+
+        ctx.strokeStyle = '#1111BB';
+        procentInPrice = (curve.vals[0] - lowest) / diffY;
+        procentInPrice = Math.sqrt(logFunc(procentInPrice,2))
+        procentInPixel = 50 + 400 * procentInPrice;
+        ctx.beginPath();
+        ctx.moveTo(testVar, 500 - procentInPixel);
+        ctx.lineTo(975, 500 - procentInPixel)
+        ctx.stroke();
+
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = 'gray';
+        procentInPrice = (curve.vals[0] - lowest) / diffY;
+        procentInPrice = Math.sqrt(logFunc(procentInPrice + 1,2))
+        procentInPixel1 = 50;
+        procentInPixel2 = 450;
+        ctx.beginPath();
+        ctx.moveTo(975, 500 - procentInPixel1);
+        ctx.lineTo(testVar, 500 - procentInPixel1)
+        ctx.moveTo(975, 500 - procentInPixel2);
+        ctx.lineTo(testVar, 500 - procentInPixel2)
+        ctx.stroke();
+
+
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'black';
+        var numberOfTicks = 9;
+        var spaceBetweenTicks = 44;
+        var startX = 975;
+        var startY = 53;
+        var lineLength = 5;
+        ctx.strokeStyle = 'black';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
+        ctx.stroke();
+
+
+
+
+        var deltaCOOL = (highest - lowest) / numberOfTicks;
 
 for (var i = 0; i <= numberOfTicks; i++) {
     var y = startY + (i * spaceBetweenTicks);
@@ -751,8 +813,17 @@ for (var i = 0; i <= numberOfTicks; i++) {
     ctx.stroke();
 
     ctx.font = '13px Arial';
-    ctx.fillText((highest - deltaCOOL * i).toFixed(3), startX + lineLength + 5, y + 4);
+
+    var procentInPrice = i / numberOfTicks;
+    
+    var logValue = Math.sqrt(logFunc(procentInPrice,2));
+
+    var priceValue = highest - (highest - lowest) * logValue;
+
+    ctx.fillText(priceValue.toFixed(3) + '$', startX + lineLength + 5, y + 4);
 }
+
+
 
 ctx.strokeStyle = 'black';
  numberOfTicks = 3;
@@ -766,9 +837,12 @@ ctx.lineTo(startX, startY + (numberOfTicks * spaceBetweenTicks));
 ctx.stroke();
 
 var procentInPrice23 = (curve.vals[0] - lowest) / diffY;
+procentInPrice23 = Math.sqrt(logFunc(procentInPrice23,2) )
 var procentInPixel23 = 50 + 400 * procentInPrice23;
 var mitten = 500 - procentInPixel23;
-console.log(mitten)
+
+
+
 for (var i = 0; i <= numberOfTicks; i++) {
     var y = 0;
     if(i == 0){
@@ -784,21 +858,34 @@ for (var i = 0; i <= numberOfTicks; i++) {
     ctx.lineTo(startX - lineLength, y);
     ctx.stroke();
     ctx.font = '13px Arial';
-
+    var startPrice = curve.vals[0];
+    var string = "";
     if(y < mitten) {
+
         ctx.fillStyle = 'green';
-
+        string =String(((((highest*100) / startPrice)).toFixed(0))) + "%";
+        ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4);
     }else if(y > mitten){
-        ctx.fillStyle = 'red';
-    }else{
-        ctx.fillStyle = 'blue';
-    }
 
-    var string = String((-100*((y / mitten) - 1)).toFixed(0)) + "%";
-    if(y == mitten){
-        string = "Startpris"
+        ctx.fillStyle = 'red';
+        string = String(((lowest*100) / startPrice).toFixed(0)) + "%";
+        if(startPrice == 0){
+            string = "100%";
+        }
+
+        ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4);
+        
+    }else{
+ 
+        ctx.fillStyle = 'blue';
+        string = "Start          "
+        ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4);
+        ctx.fillStyle = 'red';
+        string = ""    
+        ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4)
     }
-    ctx.fillText(string, startX - ctx.measureText(string).width - 5 - lineLength, y + 4);
+    
+   
     ctx.fillStyle = 'black';
 }
 ctx.fillStyle = 'black';
@@ -860,7 +947,7 @@ function getFinalVärde(curve, events){
 
     var vals = curve.vals;
     
-    console.log("bh " + BuyAndHold)
+  
     //antal aktier
     var boughtStocks = 0;
     var soldStocks = 0;
@@ -909,11 +996,13 @@ function drawSellBuy(curve, events){
     deltaX = 900 / datapointWidth;
 
     var procentInPrice = parseInt((curve.vals[0] - lowest) / diffY);
+    procentInPrice = Math.sqrt(logFunc(procentInPrice ,2))
     var procentInPixel = parseInt(50 + 400 * procentInPrice);
 
     for(var i = 0; i < events.length; i++){
 
         procentInPrice = (curve.vals[i] - lowest) / diffY;
+        procentInPrice = Math.sqrt(logFunc(procentInPrice ,2) )
         procentInPixel = 50 + 400 * procentInPrice;
 
         if(events[i] == 1){
@@ -1104,7 +1193,7 @@ var lowesti = 0;
         var procentInPrice23 = (curve.vals[0] - lowest) / diffY;
         var procentInPixel23 = 50 + 400 * procentInPrice23;
         var mitten = 500 - procentInPixel23;
-        console.log(mitten)
+        
         for (var i = 0; i <= numberOfTicks; i++) {
             var y = 0;
             if(i == 0){
@@ -1134,6 +1223,7 @@ var lowesti = 0;
             if(y == mitten){
                 string = "Startpris"
             }
+            console.log(string)
             ctx2.fillText(string, startX - ctx2.measureText(string).width - 5 - lineLength, y + 4);
             ctx2.fillStyle = 'black';
         }
